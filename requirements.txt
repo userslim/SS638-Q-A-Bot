@@ -2,9 +2,9 @@ streamlit==1.28.0
 PyPDF2==3.0.1
 langchain==0.1.0
 langchain-community==0.0.10
-langchain-text-splitters>=0.0.1,<0.1.0      # fixed: 0.0.1 is the first real version
+langchain-text-splitters>=0.0.1,<0.1.0
 langchain-openai==0.0.2
 langchain-google-genai==0.0.5
-google-generativeai                             # required by langchain-google-genai
-faiss-cpu==1.7.4
+google-generativeai
+faiss-cpu>=1.9.0,<2.0.0          # fixed: use a version that exists
 packaging
