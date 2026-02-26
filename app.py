@@ -3,13 +3,13 @@ import os
 from PyPDF2 import PdfReader
 
 # ----------------------------------------------------------------------
-# Robust imports with version checks
+# Robust imports
 # ----------------------------------------------------------------------
 try:
     import langchain
     from packaging import version
     if version.parse(langchain.__version__) < version.parse("0.1.0"):
-        st.warning(f"LangChain version {langchain.__version__} is older than 0.1.0. Some imports may fail.")
+        st.warning("LangChain version is older than 0.1.0. Some imports may fail.")
 except ImportError:
     st.error("Missing required package: langchain. Please check your requirements.txt.")
     st.stop()
@@ -21,7 +21,7 @@ except ImportError:
     try:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
     except ImportError:
-        st.error("Missing required package: langchain-text-splitters. Please install it.")
+        st.error("Missing required package: langchain-text-splitters.")
         st.stop()
 
 # Vector store
@@ -31,7 +31,7 @@ except ImportError:
     try:
         from langchain.vectorstores import FAISS
     except ImportError:
-        st.error("Missing required package: langchain-community. Please install it.")
+        st.error("Missing required package: langchain-community.")
         st.stop()
 
 # QA chain
@@ -44,14 +44,21 @@ except ImportError:
         st.error(f"Failed to import load_qa_chain: {e}")
         st.stop()
 
-# Prompt
+# Prompts
 from langchain.prompts import PromptTemplate
 
-# DeepSeek chat AND embeddings via OpenAI-compatible classes
+# Google embeddings
 try:
-    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
 except ImportError:
-    st.error("Missing required package: langchain-openai. Please install it.")
+    st.error("Missing required package: langchain-google-genai.")
+    st.stop()
+
+# DeepSeek chat via ChatOpenAI
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    st.error("Missing required package: langchain-openai.")
     st.stop()
 # ----------------------------------------------------------------------
 
@@ -59,16 +66,20 @@ st.set_page_config(page_title="SS 638 Q&A Bot", layout="wide")
 st.title("SS 638 (2018) Code of Practice Query Bot")
 st.write("Ask a question and get instant answers with clause references!")
 
-# Load DeepSeek API key from secrets
+# Load API keys from secrets
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("Please set your GOOGLE_API_KEY in Streamlit Secrets.")
+    st.stop()
 if "DEEPSEEK_API_KEY" not in st.secrets:
     st.error("Please set your DEEPSEEK_API_KEY in Streamlit Secrets.")
     st.stop()
 
+os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 os.environ["DEEPSEEK_API_KEY"] = st.secrets["DEEPSEEK_API_KEY"]
 
 @st.cache_resource
 def process_pdf():
-    """Load PDF, split into chunks, and create FAISS vector store using DeepSeek embeddings."""
+    """Load PDF, split into chunks, and create FAISS vector store using Google embeddings."""
     try:
         pdf_reader = PdfReader("SS 638_Document_compressed.pdf")
     except FileNotFoundError:
@@ -84,12 +95,8 @@ def process_pdf():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
 
-    # DeepSeek embeddings via OpenAI-compatible endpoint
-    embeddings = OpenAIEmbeddings(
-        model="deepseek-embedding",                # check DeepSeek docs for exact model name
-        openai_api_key=os.environ["DEEPSEEK_API_KEY"],
-        openai_api_base="https://api.deepseek.com/v1"
-    )
+    # Google embeddings (free tier works, no heavy local models)
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     return vector_store
 
@@ -128,4 +135,3 @@ if user_question:
         response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
         st.write("### Answer:")
         st.write(response["output_text"])
-
