@@ -3,9 +3,8 @@ import os
 from PyPDF2 import PdfReader
 
 # ----------------------------------------------------------------------
-# Robust imports with version checks and detailed error reporting
+# Robust imports with version checks
 # ----------------------------------------------------------------------
-# Check langchain version
 try:
     import langchain
     from packaging import version
@@ -48,16 +47,9 @@ except ImportError:
 # Prompt
 from langchain.prompts import PromptTemplate
 
-# Google embeddings
+# DeepSeek chat AND embeddings via OpenAI-compatible classes
 try:
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-except ImportError:
-    st.error("Missing required package: langchain-google-genai. Please install it.")
-    st.stop()
-
-# DeepSeek via ChatOpenAI
-try:
-    from langchain_openai import ChatOpenAI
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 except ImportError:
     st.error("Missing required package: langchain-openai. Please install it.")
     st.stop()
@@ -67,20 +59,16 @@ st.set_page_config(page_title="SS 638 Q&A Bot", layout="wide")
 st.title("SS 638 (2018) Code of Practice Query Bot")
 st.write("Ask a question and get instant answers with clause references!")
 
-# Load API keys from secrets
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Please set your GOOGLE_API_KEY in Streamlit Secrets.")
-    st.stop()
+# Load DeepSeek API key from secrets
 if "DEEPSEEK_API_KEY" not in st.secrets:
     st.error("Please set your DEEPSEEK_API_KEY in Streamlit Secrets.")
     st.stop()
 
-os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 os.environ["DEEPSEEK_API_KEY"] = st.secrets["DEEPSEEK_API_KEY"]
 
 @st.cache_resource
 def process_pdf():
-    """Load PDF, split into chunks, and create FAISS vector store using Google embeddings."""
+    """Load PDF, split into chunks, and create FAISS vector store using DeepSeek embeddings."""
     try:
         pdf_reader = PdfReader("SS638_document.pdf")
     except FileNotFoundError:
@@ -96,7 +84,12 @@ def process_pdf():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    # DeepSeek embeddings via OpenAI-compatible endpoint
+    embeddings = OpenAIEmbeddings(
+        model="deepseek-embedding",                # check DeepSeek docs for exact model name
+        openai_api_key=os.environ["DEEPSEEK_API_KEY"],
+        openai_api_base="https://api.deepseek.com/v1"
+    )
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     return vector_store
 
@@ -117,6 +110,7 @@ Answer:
 """
 prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
 
+# DeepSeek chat model
 model = ChatOpenAI(
     model="deepseek-chat",
     temperature=0.2,
