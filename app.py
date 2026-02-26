@@ -1,63 +1,77 @@
 import streamlit as st
 import os
+import sys
 from PyPDF2 import PdfReader
 
 # ----------------------------------------------------------------------
-# Robust imports with fallbacks and user-friendly errors
+# Robust imports with version checks and detailed error reporting
 # ----------------------------------------------------------------------
-# First, ensure langchain itself is installed
+# First, ensure langchain itself is installed and check version
 try:
     import langchain
+    st.sidebar.write(f"✅ LangChain version: {langchain.__version__}")
+    # Minimal required version for the import we need
+    from packaging import version
+    if version.parse(langchain.__version__) < version.parse("0.1.0"):
+        st.warning(f"LangChain version {langchain.__version__} is older than 0.1.0. Some imports may fail.")
 except ImportError:
     st.error("Missing required package: langchain. Please check your requirements.txt.")
     st.stop()
+except Exception as e:
+    st.error(f"Error importing langchain: {e}")
+    st.stop()
 
-# Text splitter
+# Text splitter – try multiple locations
 try:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 except ImportError:
     try:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
-    except ImportError:
-        st.error("Missing required package: langchain-text-splitters. Please install it.")
+    except ImportError as e:
+        st.error(f"Failed to import RecursiveCharacterTextSplitter: {e}")
         st.stop()
 
-# Vector store (FAISS)
+# Vector store (FAISS) – try community first, then core
 try:
-    from langchain.vectorstores import FAISS
+    from langchain_community.vectorstores import FAISS
 except ImportError:
     try:
-        from langchain_community.vectorstores import FAISS
-    except ImportError:
-        st.error("Missing required package: langchain-community. Please install it.")
+        from langchain.vectorstores import FAISS
+    except ImportError as e:
+        st.error(f"Failed to import FAISS: {e}")
         st.stop()
 
-# QA chain
+# QA chain – try primary path, then fallback, and show the actual error
 try:
     from langchain.chains.question_answering import load_qa_chain
-except ImportError:
-    st.error("Failed to import load_qa_chain from langchain. Ensure langchain version is >=0.1.0.")
-    st.stop()
+except ImportError as e1:
+    try:
+        # In some very old versions, it might be directly under langchain.chains
+        from langchain.chains import load_qa_chain
+    except ImportError as e2:
+        st.error(f"Failed to import load_qa_chain from any location.\n"
+                 f"Primary error: {e1}\nFallback error: {e2}")
+        st.stop()
 
-# Prompts
+# Prompts – usually stable
 try:
     from langchain.prompts import PromptTemplate
-except ImportError:
-    st.error("Failed to import PromptTemplate from langchain.")
+except ImportError as e:
+    st.error(f"Failed to import PromptTemplate: {e}")
     st.stop()
 
 # DeepSeek via ChatOpenAI
 try:
     from langchain_openai import ChatOpenAI
-except ImportError:
-    st.error("Missing required package: langchain-openai. Please install it.")
+except ImportError as e:
+    st.error(f"Missing required package: langchain-openai. Error: {e}")
     st.stop()
 
 # Local HuggingFace embeddings
 try:
     from langchain_community.embeddings import HuggingFaceEmbeddings
-except ImportError:
-    st.error("Missing required package: langchain-community. Please install it.")
+except ImportError as e:
+    st.error(f"Failed to import HuggingFaceEmbeddings: {e}")
     st.stop()
 # ----------------------------------------------------------------------
 
