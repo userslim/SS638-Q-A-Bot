@@ -1,6 +1,6 @@
 streamlit
 langchain
 langchain-google-genai
-pypdf
+PyPDF2
 faiss-cpu
 tiktoken
