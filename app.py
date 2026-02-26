@@ -70,9 +70,9 @@ os.environ["DEEPSEEK_API_KEY"] = st.secrets["DEEPSEEK_API_KEY"]
 def process_pdf():
     """Load PDF, split into chunks, and create FAISS vector store using DeepSeek embeddings."""
     try:
-        pdf_reader = PdfReader("SS638_document.pdf")
+        pdf_reader = PdfReader("SS 638_Document_compressed.pdf")
     except FileNotFoundError:
-        st.error("SS638_document.pdf not found in the current directory.")
+        st.error("SS 638_Document_compressed.pdf not found in the current directory.")
         st.stop()
 
     text = ""
@@ -128,3 +128,4 @@ if user_question:
         response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
         st.write("### Answer:")
         st.write(response["output_text"])
+
