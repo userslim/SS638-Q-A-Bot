@@ -47,11 +47,11 @@ except ImportError:
 # Prompts
 from langchain.prompts import PromptTemplate
 
-# Google embeddings
+# HuggingFace embeddings (local)
 try:
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    from langchain_community.embeddings import HuggingFaceEmbeddings
 except ImportError:
-    st.error("Missing required package: langchain-google-genai.")
+    st.error("Missing required package: langchain-community (or sentence-transformers).")
     st.stop()
 
 # DeepSeek chat via ChatOpenAI
@@ -66,24 +66,20 @@ st.set_page_config(page_title="SS 638 Q&A Bot", layout="wide")
 st.title("SS 638 (2018) Code of Practice Query Bot")
 st.write("Ask a question and get instant answers with clause references!")
 
-# Load API keys from secrets
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Please set your GOOGLE_API_KEY in Streamlit Secrets.")
-    st.stop()
+# Load DeepSeek API key from secrets (Google key no longer needed)
 if "DEEPSEEK_API_KEY" not in st.secrets:
     st.error("Please set your DEEPSEEK_API_KEY in Streamlit Secrets.")
     st.stop()
 
-os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 os.environ["DEEPSEEK_API_KEY"] = st.secrets["DEEPSEEK_API_KEY"]
 
 @st.cache_resource
 def process_pdf():
-    """Load PDF, split into chunks, and create FAISS vector store using Google embeddings."""
+    """Load PDF, split into chunks, and create FAISS vector store using local HuggingFace embeddings."""
     try:
-        pdf_reader = PdfReader("SS 638_Document_compressed.pdf")
+        pdf_reader = PdfReader("SS 638_Document-compressed.pdf")
     except FileNotFoundError:
-        st.error("SS 638_Document_compressed.pdf not found in the current directory.")
+        st.error("SS 638_Document-compressed.pdf not found in the current directory.")
         st.stop()
 
     text = ""
@@ -95,12 +91,12 @@ def process_pdf():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
 
-    # Google embeddings (free tier works, no heavy local models)
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    # Use a small, efficient sentence-transformer model (runs locally)
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     return vector_store
 
-with st.spinner("Loading SS 638 document and creating embeddings..."):
+with st.spinner("Loading SS 638 document and creating embeddings (this may take a minute on first run)..."):
     vector_store = process_pdf()
 st.success("✅ SS 638 Document loaded successfully!")
 
