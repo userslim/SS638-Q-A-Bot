@@ -1,98 +1,86 @@
 import streamlit as st
 import os
-import sys
 from PyPDF2 import PdfReader
 
 # ----------------------------------------------------------------------
 # Robust imports with version checks and detailed error reporting
 # ----------------------------------------------------------------------
-# First, ensure langchain itself is installed and check version
+# Check langchain version
 try:
     import langchain
-    st.sidebar.write(f"✅ LangChain version: {langchain.__version__}")
-    # Minimal required version for the import we need
     from packaging import version
     if version.parse(langchain.__version__) < version.parse("0.1.0"):
         st.warning(f"LangChain version {langchain.__version__} is older than 0.1.0. Some imports may fail.")
 except ImportError:
     st.error("Missing required package: langchain. Please check your requirements.txt.")
     st.stop()
-except Exception as e:
-    st.error(f"Error importing langchain: {e}")
-    st.stop()
 
-# Text splitter – try multiple locations
+# Text splitter
 try:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 except ImportError:
     try:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
-    except ImportError as e:
-        st.error(f"Failed to import RecursiveCharacterTextSplitter: {e}")
+    except ImportError:
+        st.error("Missing required package: langchain-text-splitters. Please install it.")
         st.stop()
 
-# Vector store (FAISS) – try community first, then core
+# Vector store
 try:
     from langchain_community.vectorstores import FAISS
 except ImportError:
     try:
         from langchain.vectorstores import FAISS
-    except ImportError as e:
-        st.error(f"Failed to import FAISS: {e}")
+    except ImportError:
+        st.error("Missing required package: langchain-community. Please install it.")
         st.stop()
 
-# QA chain – try primary path, then fallback, and show the actual error
+# QA chain
 try:
     from langchain.chains.question_answering import load_qa_chain
-except ImportError as e1:
+except ImportError:
     try:
-        # In some very old versions, it might be directly under langchain.chains
         from langchain.chains import load_qa_chain
-    except ImportError as e2:
-        st.error(f"Failed to import load_qa_chain from any location.\n"
-                 f"Primary error: {e1}\nFallback error: {e2}")
+    except ImportError as e:
+        st.error(f"Failed to import load_qa_chain: {e}")
         st.stop()
 
-# Prompts – usually stable
+# Prompt
+from langchain.prompts import PromptTemplate
+
+# Google embeddings
 try:
-    from langchain.prompts import PromptTemplate
-except ImportError as e:
-    st.error(f"Failed to import PromptTemplate: {e}")
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+except ImportError:
+    st.error("Missing required package: langchain-google-genai. Please install it.")
     st.stop()
 
 # DeepSeek via ChatOpenAI
 try:
     from langchain_openai import ChatOpenAI
-except ImportError as e:
-    st.error(f"Missing required package: langchain-openai. Error: {e}")
-    st.stop()
-
-# Local HuggingFace embeddings
-try:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-except ImportError as e:
-    st.error(f"Failed to import HuggingFaceEmbeddings: {e}")
+except ImportError:
+    st.error("Missing required package: langchain-openai. Please install it.")
     st.stop()
 # ----------------------------------------------------------------------
 
-# Set up the Streamlit interface
 st.set_page_config(page_title="SS 638 Q&A Bot", layout="wide")
 st.title("SS 638 (2018) Code of Practice Query Bot")
-st.write(
-    "Ask a question about the Singapore Standard for Electrical Installations, "
-    "and get instant answers with clause references!"
-)
+st.write("Ask a question and get instant answers with clause references!")
 
-# Securely load the DeepSeek API Key from Streamlit secrets
-if "DEEPSEEK_API_KEY" in st.secrets:
-    os.environ["DEEPSEEK_API_KEY"] = st.secrets["DEEPSEEK_API_KEY"]
-else:
-    st.error("Please set your DEEPSEEK_API_KEY in the Streamlit Secrets.")
+# Load API keys from secrets
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("Please set your GOOGLE_API_KEY in Streamlit Secrets.")
     st.stop()
+if "DEEPSEEK_API_KEY" not in st.secrets:
+    st.error("Please set your DEEPSEEK_API_KEY in Streamlit Secrets.")
+    st.stop()
+
+os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+os.environ["DEEPSEEK_API_KEY"] = st.secrets["DEEPSEEK_API_KEY"]
 
 @st.cache_resource
 def process_pdf():
-    """Load PDF, split into chunks, and create FAISS vector store."""
+    """Load PDF, split into chunks, and create FAISS vector store using Google embeddings."""
     try:
         pdf_reader = PdfReader("SS638_document.pdf")
     except FileNotFoundError:
@@ -108,16 +96,14 @@ def process_pdf():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
 
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     return vector_store
 
-# Load document
 with st.spinner("Loading SS 638 document and creating embeddings..."):
     vector_store = process_pdf()
 st.success("✅ SS 638 Document loaded successfully!")
 
-# Set up prompt template
 prompt_template = """
 You are an expert in the Singapore Standard SS 638: 2018 Code of practice for electrical installations.
 Answer the user's question based ONLY on the provided context. 
@@ -131,7 +117,6 @@ Answer:
 """
 prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
 
-# DeepSeek chat model
 model = ChatOpenAI(
     model="deepseek-chat",
     temperature=0.2,
@@ -141,10 +126,7 @@ model = ChatOpenAI(
 
 chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
-# User input
-user_question = st.text_input(
-    "Enter your question here (e.g., 'What are the requirements for locations containing a bath or shower?'):"
-)
+user_question = st.text_input("Enter your question here:")
 
 if user_question:
     with st.spinner("🔍 Searching the standard..."):
