@@ -4,7 +4,5 @@ langchain==0.1.0
 langchain-community==0.0.10
 langchain-text-splitters>=0.0.1,<0.1.0
 langchain-openai==0.0.2
-langchain-google-genai==0.0.5
-google-generativeai
-faiss-cpu>=1.9.0,<2.0.0          # fixed: use a version that exists
+faiss-cpu>=1.9.0,<2.0.0
 packaging
